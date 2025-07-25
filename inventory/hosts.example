@@ -1,0 +1,8 @@
+#[all:vars]
+#ansible_ssh_common_args='-o StrictHostKeyChecking=no'
+
+[kvm_hosts]
+atlas ansible_host=192.168.1.10 ansible_user=debian
+
+[routers]
+iris ansible_host=192.168.1.10 ansible_user=debian

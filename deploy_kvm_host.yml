@@ -1,0 +1,8 @@
+---
+- name: Configure KVM host with bridge networking
+  hosts: kvm_hosts
+  become: true
+  roles:
+#    - essential_utils
+#    - bridge_networking
+    - kvm_setup

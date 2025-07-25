@@ -1,0 +1,26 @@
+allow-hotplug {{ dev_WAN }}
+iface {{ dev_WAN }} inet manual
+{% if WOL %}
+	ethernet-wol g
+{% endif %}
+
+auto {{ dev_BRIDGE_WAN }}
+iface {{ dev_BRIDGE_WAN }} inet {{ bridge_mode }}
+    bridge_ports {{ dev_WAN }}
+    bridge_stp off
+    bridge_fd 0
+    bridge_maxwait 0
+    #bridge_stp on
+    #bridge_fd 2
+    #bridge_maxwait 5
+{% if bridge_mode == 'static' %}
+    address {{ ip_WAN }}
+    netmask {{ mask_WAN }}
+    gateway {{ gw_WAN }}
+{% if broadcast is defined %}
+    broadcast {{ mask_WAN }}
+{% endif %}
+{% if dns_nameservers is defined %}
+    dns-nameservers {{ dns_nameservers | join(' ') }}
+{% endif %}
+{% endif %}

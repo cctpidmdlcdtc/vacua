@@ -1,0 +1,7 @@
+inventory/*
+!inventory/hosts.example
+host_vars/*
+!host_vars/atlas.yml
+!host_vars/iris.yml
+venv
+TODO.md

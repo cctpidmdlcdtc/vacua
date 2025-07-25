@@ -1,0 +1,26 @@
+---
+- name: Leave only loopback in main interfaces file
+  template:
+    src: interfaces.j2
+    dest: /etc/network/interfaces
+    owner: root
+    group: root
+    mode: '0644'
+  notify: restart networking
+
+- name: Install bridge-utils package
+  apt:
+    name: bridge-utils
+    state: present
+    update_cache: yes
+    cache_valid_time: 3600
+  tags: packages
+
+- name: Create bridge configuration
+  template:
+    src: bridge.cfg.j2
+    dest: "/etc/network/interfaces.d/{{ dev_BRIDGE_WAN }}"
+    owner: root
+    group: root
+    mode: '0644'
+  notify: restart networking

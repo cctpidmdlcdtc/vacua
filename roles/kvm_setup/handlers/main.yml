@@ -1,0 +1,4 @@
+---
+- name: Rebuild GRUB configuration
+  ansible.builtin.command: update-grub
+  listen: update grub

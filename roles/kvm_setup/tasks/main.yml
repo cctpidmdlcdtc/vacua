@@ -1,0 +1,195 @@
+---
+# KVM/VFIO GPU Passthrough Configuration for Debian Bookworm
+# This playbook configures hardware virtualization with GPU passthrough
+
+- name: Check for virtualization extensions
+  shell: "grep -E '^flags.*(vmx|svm)' /proc/cpuinfo"
+  register: virt_check
+  failed_when: false
+  changed_when: false
+
+- name: Ensure virtualization is supported
+  fail:
+    msg: "Virtualization not supported (no vmx or svm flags found in /proc/cpuinfo)"
+  when: virt_check.rc != 0
+
+- name: Identify CPU vendor information
+  ansible.builtin.command: lscpu
+  register: cpu_info
+  changed_when: false  # Read-only operation, doesn't modify system state
+
+- name: Extract CPU vendor ID from lscpu output
+  ansible.builtin.set_fact:
+    cpu_vendor: "{{ cpu_info.stdout | regex_search('Vendor ID:\\s+(\\S+)', '\\1') or cpu_info.stdout | regex_search('ID de fabricante:\\s+(\\S+)', '\\1') }}"
+
+- name: Extract CPU vendor ID from lscpu output
+  ansible.builtin.set_fact:
+    cpu_vendor: ["GenuineIntel"]
+
+- name: Display detected CPU vendor
+  ansible.builtin.debug:
+    msg: "Detected CPU Vendor: {{ cpu_vendor[0] if cpu_vendor else 'Unknown' }}"
+
+
+# AMD CPU Configuration Block
+- name: Configure AMD-specific IOMMU and VFIO settings
+  block:
+    - name: Check if AMD IOMMU parameters are present in GRUB configuration
+      ansible.builtin.lineinfile:
+        backup: true
+        path: /etc/default/grub
+        regexp: '^GRUB_CMDLINE_LINUX_DEFAULT=".*amd_iommu=on iommu=pt kvm.ignore_msrs=1.*"'
+        state: absent
+      check_mode: true
+      register: amd_grub_iommu_check
+      changed_when: false
+
+    - name: Add AMD IOMMU parameters to GRUB if missing
+      ansible.builtin.lineinfile:
+        backrefs: true
+        path: /etc/default/grub
+        regexp: '^(GRUB_CMDLINE_LINUX_DEFAULT=".*)"$'
+        line: '\1 amd_iommu=on iommu=pt kvm.ignore_msrs=1"'
+      when: amd_grub_iommu_check.found == 0
+      notify: update grub
+
+    - name: Check if VFIO early loading parameters are present in GRUB
+      ansible.builtin.lineinfile:
+        backup: true
+        path: /etc/default/grub
+        regexp: '^GRUB_CMDLINE_LINUX_DEFAULT=".*earlymodules=vfio-pci video=efifb:off.*"'
+        state: absent
+      check_mode: true
+      register: amd_grub_vfio_check
+      changed_when: false
+
+    - name: Add VFIO early loading parameters to GRUB if missing
+      ansible.builtin.lineinfile:
+        backrefs: true
+        path: /etc/default/grub
+        regexp: '^(GRUB_CMDLINE_LINUX_DEFAULT=".*)"$'
+        line: '\1 earlymodules=vfio-pci video=efifb:off"'
+      when: amd_grub_vfio_check.found == 0
+      notify: update grub
+
+  when: cpu_vendor is defined and "AMD" in cpu_vendor[0]
+
+# Intel CPU Configuration Block
+- name: Configure Intel-specific IOMMU and graphics settings
+  block:
+    - name: Check if Intel IOMMU parameters are present in GRUB configuration
+      ansible.builtin.lineinfile:
+        backup: true
+        path: /etc/default/grub
+        regexp: '^GRUB_CMDLINE_LINUX_DEFAULT=".*intel_iommu=on,igfx_off kvm.ignore_msrs=1.*"'
+        state: absent
+      check_mode: true
+      register: intel_grub_iommu_check
+      changed_when: false
+
+    - name: Add Intel IOMMU parameters to GRUB if missing
+      ansible.builtin.lineinfile:
+        backrefs: true
+        path: /etc/default/grub
+        regexp: '^(GRUB_CMDLINE_LINUX_DEFAULT=".*)"$'
+        line: '\1 intel_iommu=on,igfx_off kvm.ignore_msrs=1"'
+      when: intel_grub_iommu_check.found == 0
+      notify: update grub
+
+    - name: Check if Intel i915 performance tuning is configured in GRUB
+      ansible.builtin.lineinfile:
+        backup: true
+        path: /etc/default/grub
+        regexp: '^GRUB_CMDLINE_LINUX_DEFAULT=".*dev.i915.perf_stream_paranoid=0.*"'
+        state: absent
+      check_mode: true
+      register: intel_grub_perf_check
+      changed_when: false
+
+    - name: Add Intel i915 performance tuning parameters if missing
+      ansible.builtin.lineinfile:
+        backrefs: true
+        path: /etc/default/grub
+        regexp: '^(GRUB_CMDLINE_LINUX_DEFAULT=".*)"$'
+        line: '\1 dev.i915.perf_stream_paranoid=0"'
+      when: intel_grub_perf_check.found == 0
+      notify: update grub
+
+  when: cpu_vendor is defined and "Intel" in cpu_vendor[0]
+
+# GPU Detection and VFIO Configuration
+- name: Detect NVIDIA GPU PCI IDs for VFIO binding
+  ansible.builtin.shell: |
+    lspci -nnk | grep NVIDIA | rev | cut -d ']' -f2 | cut -d '[' -f1 | rev | sort -u | tr '\n' ',' | sed 's/,$//'
+  register: gpu_ids
+  changed_when: false
+  failed_when: false
+
+- name: Configure VFIO for detected NVIDIA GPUs
+  block:
+    - name: Create VFIO configuration file for GPU passthrough
+      ansible.builtin.template:
+        src: vfio.conf.j2
+        dest: /etc/modprobe.d/vfio.conf
+        owner: root
+        group: root
+        mode: '0644'
+      vars:
+        gpu_ids: "{{ gpu_ids.stdout }}"
+
+    - name: Configure VFIO-PCI module to load at boot
+      ansible.builtin.copy:
+        content: |
+          # Load VFIO-PCI driver early for GPU passthrough
+          vfio-pci
+        dest: /etc/modules-load.d/vfio-pci.conf
+        owner: root
+        group: root
+        mode: '0644'
+
+  when: gpu_ids.stdout | length > 0
+
+# NVIDIA Driver Management for Debian
+- name: Manage NVIDIA drivers for VFIO compatibility
+  block:
+    - name: Remove conflicting NVIDIA proprietary drivers
+      ansible.builtin.apt:
+        name: "nvidia-*"
+        state: absent
+        autoremove: yes
+        purge: yes
+
+    - name: Blacklist NVIDIA Nouveau open-source drivers
+      ansible.builtin.blockinfile:
+        path: /etc/modprobe.d/blacklist-nvidia.conf
+        create: yes
+        owner: root
+        group: root
+        mode: '0644'
+        block: |
+          # Blacklist Nouveau driver to prevent conflicts with VFIO
+          blacklist nouveau
+          options nouveau modeset=0
+        marker: "# {mark} ANSIBLE MANAGED BLOCK - NVIDIA Blacklist"
+
+    - name: Update initramfs after driver changes
+      ansible.builtin.command: update-initramfs -u
+      when: ansible_facts['distribution'] == 'Debian'
+
+  when: gpu_ids.stdout | length > 0
+
+# KVM/QEMU Package Installation
+- name: Install KVM virtualization stack
+  ansible.builtin.apt:
+    pkg:
+      - qemu-kvm                    # KVM hypervisor
+      - qemu-utils                  # QEMU utilities
+      - libvirt-daemon-system       # Libvirt daemon
+      - libvirt-clients             # Libvirt client tools
+      - bridge-utils                # Network bridge utilities
+      - virt-manager                # GUI management tool
+      - ovmf                        # UEFI firmware for VMs
+      - libguestfs-tools            # Guest filesystem tools
+    state: present
+    update_cache: yes
+    cache_valid_time: 3600

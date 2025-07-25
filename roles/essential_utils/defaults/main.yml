@@ -1,0 +1,30 @@
+essential_packages_list:
+
+  # System Monitoring & Diagnostics
+  - htop              # Interactive process viewer
+  - iotop             # Monitor real-time disk I/O per process
+  - strace            # Trace system calls and signals
+  - cbm               # Show current bandwidth usage per network interface
+  - lm-sensors        # Read system temperature, fan speed, and voltage sensors
+  - smartmontools     # Monitor and test hard drive SMART status
+
+  # Networking Tools
+  - curl              # Command-line HTTP client
+  #- net-tools         # Legacy networking tools (e.g. ifconfig, netstat)
+  #- dnsutils          # DNS query tools (e.g. dig, nslookup)
+  - tcpdump           # Network packet capture tool
+
+  # System Utilities
+  - vim               # Text editor (Vi Improved)
+  - git               # Distributed version control system
+  - rsync             # Fast, incremental file transfer tool
+  - hdparm            # Configure and test SATA/IDE device parameters
+
+  # Security & Maintenance
+  - unattended-upgrades  # Automatically install security updates
+
+  # Archive Tools (Optional)
+  #- unrar            # Extract RAR archives (non-free version)
+  #- unrar-free       # Free implementation of unrar (doesn't support all RAR formats)
+  #- p7zip            # Command-line version of 7-Zip (basic)
+  #- p7zip-full       # Full support for 7z and other archive formats
