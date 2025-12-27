@@ -1,6 +1,23 @@
 ---
+#- name: restart networking
+#  service:
+#    name: networking
+#    state: restarted
+#    daemon_reload: true
+
 - name: restart networking
-  service:
-    name: networking
-    state: restarted
-    daemon_reload: true
+  block:
+    - name: Restart networking service (async when IP might change)
+      service:
+        name: networking
+        state: restarted
+        daemon_reload: true
+      async: "{{ 10 if (bridge_mode is defined and bridge_mode != 'static') else 0 }}"
+      poll: "{{ 0 if (bridge_mode is defined and bridge_mode != 'static') else 5 }}"
+      
+    - name: IP change warning
+      debug:
+        msg: |
+          ⚠️  Red reiniciada. Si el modo bridge no es 'static', la IP puede haber cambiado.
+          Si las siguientes tareas fallan, verifica y actualiza la IP del host.
+      when: bridge_mode is defined and bridge_mode != 'static'

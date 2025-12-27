@@ -1,0 +1,7 @@
+---
+- name: Configure router with bridge networking
+  hosts: routers
+  become: true
+  roles:
+    - essential_utils
+    - bridge_networking

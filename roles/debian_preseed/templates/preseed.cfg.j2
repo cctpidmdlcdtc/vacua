@@ -1,0 +1,71 @@
+### Locale y teclado
+d-i debian-installer/locale string es_ES.UTF-8
+d-i console-keymaps-at/keymap select es
+d-i keyboard-configuration/xkb-keymap select es
+
+### Configuración de red
+d-i netcfg/choose_interface select auto
+d-i netcfg/get_hostname string {{ ansible_hostname }}
+d-i netcfg/get_domain string local
+
+### Configuración de reloj y zona horaria
+d-i clock-setup/utc boolean true
+d-i time/zone string Europe/Madrid
+d-i clock-setup/ntp boolean true
+
+# Aceptar borrado de volúmenes LVM existentes
+d-i partman-lvm/device_remove_lvm boolean true
+d-i partman-lvm/confirm boolean true
+d-i partman-lvm/confirm_nooverwrite boolean true
+
+# Aceptar borrado de RAID previos (si hubiera)
+d-i partman-md/device_remove_md boolean true
+d-i partman-md/confirm boolean true
+
+### Particionado automático (¡BORRA TODO!)
+d-i partman-auto/method string regular
+d-i partman-auto/disk string /dev/{{ os_disk }}
+d-i partman-auto/choose_recipe select atomic
+
+### Comentar si no se quiere lvm
+d-i partman-auto/method string lvm
+d-i partman-auto-lvm/guided_size string 20%
+d-i partman-auto-lvm/new_vg_name string vg-{{ ansible_hostname }}
+
+### Confirmar particionado
+d-i partman-partitioning/confirm_write_new_label boolean true
+d-i partman/choose_partition select finish
+d-i partman/confirm boolean true
+d-i partman/confirm_nooverwrite boolean true
+
+### Si es BIOS en vez de UEFI
+d-i partman-efi/non_efi_system boolean true
+
+### Usuario root
+d-i passwd/root-login boolean true
+d-i passwd/root-password password 1234
+d-i passwd/root-password-again password 1234
+
+### Usuario normal
+d-i passwd/user-fullname string Usuario
+d-i passwd/username string ceon
+d-i passwd/user-password password 1234
+d-i passwd/user-password-again password 1234
+
+### Mirror
+d-i mirror/country string manual
+d-i mirror/http/hostname string deb.debian.org
+d-i mirror/http/directory string /debian
+d-i mirror/http/proxy string
+
+### Selección de paquetes
+tasksel tasksel/first multiselect standard, ssh-server
+popularity-contest popularity-contest/participate boolean true
+
+### Instalar GRUB
+d-i grub-installer/only_debian boolean true
+d-i grub-installer/with_other_os boolean true
+d-i grub-installer/bootdev string /dev/{{ os_disk }}
+
+### Finalizar sin preguntas
+d-i finish-install/reboot_in_progress note
